@@ -14,7 +14,7 @@ app.engine('hbs', handlebars({defaultLayout: 'default.hbs'}))
 app.set('view engine', 'hbs')
 
 //SQL Query constant
-const SQL_FIND_BY_NAME = 'select * from apps where name like ? limit ?;'
+const SQL_FIND_BY_NAME = 'select * from apps where name like ? limit ? offset ?;'
 
 //MySQL Connection Pool settings
 const pool = mysql.createPool({
@@ -29,10 +29,10 @@ const pool = mysql.createPool({
 })
 
 //Query Database
-const retrieveFromDb = async (appName) => {
+const retrieveFromDb = async (appName, offsetNum) => {
     const conn = await pool.getConnection()
     try {
-        const result = await conn.query(SQL_FIND_BY_NAME, [`%${appName}%`, 20])
+        const result = await conn.query(SQL_FIND_BY_NAME, [`%${appName}%`, 20, offsetNum])
         return result
     }
     catch(e) {
@@ -50,13 +50,62 @@ app.get('/', (req, res) => {
     res.render('index')
 })
 
-app.get('/retrieve', (req, res) => {
-    const dbCall = retrieveFromDb(req.query.appName)
+app.get('/nextPage', (req, res) => {
+    const appName = req.query.appName
+    const offset = parseInt(req.query.currentOffset) + 20
+    const dbCall = retrieveFromDb(appName, offset)
     dbCall.then(result => {
         res.status(200)
         res.type('text/html')
         res.render('result', {
-            result: result[0]
+            result: result[0],
+            offset,
+            appName
+        })
+    })
+})
+
+app.get('/prevPage', (req, res) => {
+    const appName = req.query.appName
+    const offset = parseInt(req.query.currentOffset) - 20
+    if(offset < 0) {
+        const newOffset = 0
+        const dbCall = retrieveFromDb(appName, newOffset)
+        dbCall.then(result => {
+            res.status(200)
+            res.type('text/html')
+            res.render('result', {
+                result: result[0],
+                offset: newOffset,
+                appName
+            })
+        })
+    }
+    else {
+        const dbCall = retrieveFromDb(appName, offset)
+        dbCall.then(result => {
+            res.status(200)
+            res.type('text/html')
+            res.render('result', {
+                result: result[0],
+                offset,
+                appName
+            })
+        })
+    }
+    
+})
+
+app.get('/retrieve', (req, res) => {
+    const appName = req.query.appName
+    const dbCall = retrieveFromDb(appName, 0)
+    dbCall.then(result => {
+        res.status(200)
+        res.type('text/html')
+        res.render('result', {
+            result: result[0],
+            offset: 0,
+            appName
         })
     })
 })
